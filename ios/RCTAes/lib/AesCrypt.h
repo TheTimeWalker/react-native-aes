@@ -8,8 +8,9 @@
 #import <Foundation/Foundation.h>
 
 @interface AesCrypt : NSObject
-+ (NSString *) encrypt: (NSString *)clearText  key: (NSString *)key iv: (NSString *)iv;
-+ (NSString *) decrypt: (NSString *)cipherText key: (NSString *)key iv: (NSString *)iv;
++ (NSString *) init: (NSString *)mode  key: (NSString *)key iv: (NSString *)iv;
++ (NSString *) update: (NSString *)uniqueID data: (NSString *)data;
++ (NSString *) doFinal: (NSString *)uniqueID data: (NSString *)data;
 + (NSString *) pbkdf2:(NSString *)password salt: (NSString *)salt cost: (NSInteger)cost length: (NSInteger)length;
 + (NSString *) hmac256: (NSString *)input key: (NSString *)key;
 + (NSString *) sha1: (NSString *)input;

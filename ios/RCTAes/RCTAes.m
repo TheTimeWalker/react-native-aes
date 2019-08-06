@@ -14,27 +14,33 @@
 
 RCT_EXPORT_MODULE()
 
-RCT_EXPORT_METHOD(encrypt:(NSString *)data key:(NSString *)key iv:(NSString *)iv
-                  resolver:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject) {
+RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(init:(NSString *)mode key:(NSString *)key iv:(NSString *)iv) {
     NSError *error = nil;
-    NSString *base64 = [AesCrypt encrypt:data key:key iv:iv];
-    if (base64 == nil) {
-        reject(@"encrypt_fail", @"Encrypt error", error);
+    NSString *uniqueID = [AesCrypt init:mode key:key iv:iv];
+    if (uniqueID == nil) {
+        return error;
     } else {
-        resolve(base64);
+        return uniqueID;
     }
 }
 
-RCT_EXPORT_METHOD(decrypt:(NSString *)base64 key:(NSString *)key iv:(NSString *)iv
-                  resolver:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject) {
+RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(update:(NSString *)uniqueID data:(NSString *)data) {
     NSError *error = nil;
-    NSString *data = [AesCrypt decrypt:base64 key:key iv:iv];
-    if (data == nil) {
-        reject(@"decrypt_fail", @"Decrypt failed", error);
+    NSString *base64 = [AesCrypt update:uniqueID data:data];
+    if (base64 == nil) {
+        return error;
     } else {
-        resolve(data);
+        return base64;
+    }
+}
+
+RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(doFinal:(NSString *)uniqueID data:(NSString *)data) {
+    NSError *error = nil;
+    NSString *base64 = [AesCrypt doFinal:uniqueID data:data];
+    if (base64 == nil) {
+        return error;
+    } else {
+        return base64;
     }
 }
 
