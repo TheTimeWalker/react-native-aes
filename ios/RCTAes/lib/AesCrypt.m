@@ -11,9 +11,15 @@
 
 #import "AesCrypt.h"
 
+static NSMutableDictionary *cryptorDict = nil;
+
 @implementation AesCrypt
 
-static NSDictionary *cryptorDict = [NSDictionary dictionary];
++ (void) initialize {
+    if (cryptorDict == nil) {
+        cryptorDict = [NSMutableDictionary dictionary];
+    }
+}
 
 + (NSString *) toHex:(NSData *)nsdata {
     NSString * hexStr = [NSString stringWithFormat:@"%@", nsdata];
@@ -39,27 +45,27 @@ static NSDictionary *cryptorDict = [NSDictionary dictionary];
     // Data of String to generate Hash key(hexa decimal string).
     NSData *passwordData = [password dataUsingEncoding:NSUTF8StringEncoding];
     NSData *saltData = [salt dataUsingEncoding:NSUTF8StringEncoding];
-
+    
     // Hash key (hexa decimal) string data length.
     NSMutableData *hashKeyData = [NSMutableData dataWithLength:length/8];
-
+    
     // Key Derivation using PBKDF2 algorithm.
     int status = CCKeyDerivationPBKDF(
-                    kCCPBKDF2,
-                    passwordData.bytes,
-                    passwordData.length,
-                    saltData.bytes,
-                    saltData.length,
-                    kCCPRFHmacAlgSHA512,
-                    cost,
-                    hashKeyData.mutableBytes,
-                    hashKeyData.length);
-
+                                      kCCPBKDF2,
+                                      passwordData.bytes,
+                                      passwordData.length,
+                                      saltData.bytes,
+                                      saltData.length,
+                                      kCCPRFHmacAlgSHA512,
+                                      cost,
+                                      hashKeyData.mutableBytes,
+                                      hashKeyData.length);
+    
     if (status == kCCParamError) {
         NSLog(@"Key derivation error");
         return @"";
     }
-
+    
     return [self toHex:hashKeyData];
 }
 
@@ -69,9 +75,9 @@ static NSDictionary *cryptorDict = [NSDictionary dictionary];
     NSData *ivData = [self fromHex:iv];
     //    NSData *keyData = [key dataUsingEncoding:NSUTF8StringEncoding];
     size_t numBytes = 0;
-
+    
     NSMutableData * buffer = [[NSMutableData alloc] initWithLength:[data length] + kCCBlockSizeAES128];
-
+    
     CCCryptorStatus cryptStatus = CCCrypt(
                                           [operation isEqualToString:@"encrypt"] ? kCCEncrypt : kCCDecrypt,
                                           kCCAlgorithmAES128,
@@ -81,7 +87,7 @@ static NSDictionary *cryptorDict = [NSDictionary dictionary];
                                           data.bytes, data.length,
                                           buffer.mutableBytes,  buffer.length,
                                           &numBytes);
-
+    
     if (cryptStatus == kCCSuccess) {
         [buffer setLength:numBytes];
         return buffer;
@@ -90,55 +96,90 @@ static NSDictionary *cryptorDict = [NSDictionary dictionary];
     return nil;
 }
 
-+ (NSString *) init: (NSString *)mode key: (NSString *)key iv: (NSString *)iv {
++ (NSString *) initCipher: (NSString *)mode key: (NSString *)key iv: (NSString *)iv {
     //convert hex string to hex data
     NSData *keyData = [self fromHex:key];
     NSData *ivData = [self fromHex:iv];
-
+    
     CCCryptorRef cryptor;
     CCCryptorCreate(
                     [mode isEqualToString:@"encrypt"] ? kCCEncrypt : kCCDecrypt,
                     kCCAlgorithmAES128,
-                    kCCOptionPKCS5Padding
+                    kCCOptionPKCS7Padding,
                     keyData.bytes, kCCKeySizeAES128,
                     ivData.bytes,
                     &cryptor);
     NSString *uniqueID = [self randomUuid];
-    [cryptorDict setObject: @cryptor forKey: @uniqueID]
-
+    [cryptorDict setObject: [NSValue valueWithPointer:cryptor] forKey: uniqueID];
+    
     return uniqueID;
 }
 
-+ (NSString *) update: (NSString *)uniqueID data: (NSString *)data {
-    CCCryptorRef cryptor = [cryptorDict objectForKey: @uniqueID]
-    NSData *decodedData = [[NSData alloc] initWithBase64EncodedString:base64String options:0];
-
-    NSMutableData *encryptedData = [[NSMutableData alloc] initWithLength:[decodedData length] + kCCBlockSizeAES128];
++ (NSData *) encrypt: (NSString *)uniqueID data: (NSData *)data {
+    CCCryptorRef cryptor = [[cryptorDict objectForKey: uniqueID] pointerValue];
+    
+    size_t bufferSize = data.length + kCCBlockSizeAES128;
+    void *buffer = malloc(bufferSize);
     size_t updateLength;
-    CCCryptorUpdate(cryptor,
-                    [decodedData bytes],
-                    [decodedData length],
-                    [encryptedData mutableBytes],
-                    [encryptedData length],
-                    &updateLength);
+    CCCryptorStatus result = CCCryptorUpdate(cryptor,
+                                             [data bytes],
+                                             [data length],
+                                             buffer,
+                                             bufferSize,
+                                             &updateLength);
+    
+    if (result == kCCSuccess) {
+        NSData *result = [NSData dataWithBytes:buffer length:updateLength];
+        free(buffer);
+        return result;
+    }
+    else {
+        return nil;
+    }
+}
 
-    return [encryptedData base64EncodedStringWithOptions:0];
++ (NSString *) update: (NSString *)uniqueID data: (NSString *)data {
+    @autoreleasepool {
+        NSData *decodedData = [[NSData alloc] initWithBase64EncodedString:data options:0];
+        NSData *encryptedData = [self encrypt:uniqueID data:decodedData];
+        NSString *base64 = [encryptedData base64EncodedStringWithOptions:0];
+        return base64;
+    }
 }
 
 + (NSString *) doFinal: (NSString *)uniqueID data: (NSString *)data {
-    CCCryptorRef cryptor = [cryptorDict objectForKey: @uniqueID]
-    NSData *decodedData = [[NSData alloc] initWithBase64EncodedString:base64String options:0];
-
-    NSMutableData *encryptedData = [[NSMutableData alloc] initWithLength:[decodedData length] + kCCBlockSizeAES128];
+    CCCryptorRef cryptor = [[cryptorDict objectForKey: uniqueID] pointerValue];
+    NSData *decodedData = [[NSMutableData alloc] initWithLength:[data length] + kCCBlockSizeAES128];
+    
+    NSMutableData *finalData = [NSMutableData data];
+    NSMutableData *encryptedData = [[NSMutableData alloc] initWithLength:[decodedData length]];
     size_t finalLength;
-    CCCryptorFinal(cryptor,
-                   [encryptedData mutableBytes],
-                   [encryptedData length],
-                   &finalLength);
-
+    
+    CCCryptorStatus result1 = CCCryptorUpdate(cryptor,
+                                              [decodedData bytes],
+                                              [decodedData length],
+                                              [encryptedData mutableBytes],
+                                              [encryptedData length],
+                                              &finalLength);
+    
+    [finalData appendBytes:encryptedData.bytes length:finalLength];
+    
+    CCCryptorStatus result2 = CCCryptorFinal(cryptor,
+                                             [encryptedData mutableBytes],
+                                             [encryptedData length],
+                                             &finalLength);
+    
+    [finalData appendBytes:encryptedData.bytes length:finalLength];
+    
     CCCryptorRelease(cryptor);
-    [cryptorDict removeObjectForKey: @uniqueID];
-    return [encryptedData base64EncodedStringWithOptions:0];
+    [cryptorDict removeObjectForKey: uniqueID];
+    
+    if (result2 == kCCSuccess) {
+        return [finalData base64EncodedStringWithOptions:0];
+    }
+    else {
+        return nil;
+    }
 }
 
 + (NSString *) hmac256: (NSString *)input key: (NSString *)key {
@@ -174,7 +215,7 @@ static NSDictionary *cryptorDict = [NSDictionary dictionary];
 }
 
 + (NSString *) randomUuid {
-  return [[NSUUID UUID] UUIDString];
+    return [[NSUUID UUID] UUIDString];
 }
 
 + (NSString *) randomKey: (NSInteger)length {

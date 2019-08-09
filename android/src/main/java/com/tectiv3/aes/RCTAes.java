@@ -56,7 +56,7 @@ public class RCTAes extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod(isBlockingSynchronousMethod = true)
-    public String init(String mode, String key, String iv) {
+    public String initCipher(String mode, String key, String iv) {
         try {
             int cipherMode;
             switch (mode) {

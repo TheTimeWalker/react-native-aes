@@ -9,14 +9,15 @@
 
 #import "RCTAes.h"
 #import "AesCrypt.h"
+#import <React/RCTLog.h>
 
 @implementation RCTAes
 
 RCT_EXPORT_MODULE()
 
-RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(init:(NSString *)mode key:(NSString *)key iv:(NSString *)iv) {
+RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(initCipher:(NSString *)mode key:(NSString *)key iv:(NSString *)iv) {
     NSError *error = nil;
-    NSString *uniqueID = [AesCrypt init:mode key:key iv:iv];
+    NSString *uniqueID = [NSString stringWithString:[AesCrypt initCipher:mode key:key iv:iv]];
     if (uniqueID == nil) {
         return error;
     } else {
@@ -26,7 +27,7 @@ RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(init:(NSString *)mode key:(NSString *)key
 
 RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(update:(NSString *)uniqueID data:(NSString *)data) {
     NSError *error = nil;
-    NSString *base64 = [AesCrypt update:uniqueID data:data];
+    NSString *base64 = [NSString stringWithString:[AesCrypt update:uniqueID data:data]];
     if (base64 == nil) {
         return error;
     } else {
@@ -36,7 +37,7 @@ RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(update:(NSString *)uniqueID data:(NSStrin
 
 RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(doFinal:(NSString *)uniqueID data:(NSString *)data) {
     NSError *error = nil;
-    NSString *base64 = [AesCrypt doFinal:uniqueID data:data];
+    NSString *base64 = [NSString stringWithString:[AesCrypt doFinal:uniqueID data:data]];
     if (base64 == nil) {
         return error;
     } else {
