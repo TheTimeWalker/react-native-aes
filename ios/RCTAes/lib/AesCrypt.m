@@ -104,9 +104,9 @@ static NSMutableDictionary *cryptorDict = nil;
     CCCryptorRef cryptor;
     CCCryptorCreate(
                     [mode isEqualToString:@"encrypt"] ? kCCEncrypt : kCCDecrypt,
-                    kCCAlgorithmAES128,
+                    kCCAlgorithmAES,
                     kCCOptionPKCS7Padding,
-                    keyData.bytes, kCCKeySizeAES128,
+                    keyData.bytes, kCCKeySizeAES256,
                     ivData.bytes,
                     &cryptor);
     NSString *uniqueID = [self randomUuid];
@@ -149,33 +149,34 @@ static NSMutableDictionary *cryptorDict = nil;
 
 + (NSString *) doFinal: (NSString *)uniqueID data: (NSString *)data {
     CCCryptorRef cryptor = [[cryptorDict objectForKey: uniqueID] pointerValue];
-    NSData *decodedData = [[NSMutableData alloc] initWithLength:[data length] + kCCBlockSizeAES128];
+    NSData *decodedData = [[NSData alloc] initWithBase64EncodedString:data options:0];
     
     NSMutableData *finalData = [NSMutableData data];
-    NSMutableData *encryptedData = [[NSMutableData alloc] initWithLength:[decodedData length]];
+    NSMutableData *buffer = [NSMutableData dataWithLength:decodedData.length + kCCBlockSizeAES128];
     size_t finalLength;
     
     CCCryptorStatus result1 = CCCryptorUpdate(cryptor,
                                               [decodedData bytes],
                                               [decodedData length],
-                                              [encryptedData mutableBytes],
-                                              [encryptedData length],
+                                              [buffer mutableBytes],
+                                              [buffer length],
                                               &finalLength);
     
-    [finalData appendBytes:encryptedData.bytes length:finalLength];
+    [finalData appendBytes:buffer.bytes length:finalLength];
     
     CCCryptorStatus result2 = CCCryptorFinal(cryptor,
-                                             [encryptedData mutableBytes],
-                                             [encryptedData length],
+                                             [buffer mutableBytes],
+                                             [buffer length],
                                              &finalLength);
     
-    [finalData appendBytes:encryptedData.bytes length:finalLength];
-    
+    [finalData appendBytes:buffer.bytes length:finalLength];
+
     CCCryptorRelease(cryptor);
     [cryptorDict removeObjectForKey: uniqueID];
     
     if (result2 == kCCSuccess) {
-        return [finalData base64EncodedStringWithOptions:0];
+        NSData *result = [NSData dataWithData:finalData];
+        return [result base64EncodedStringWithOptions:0];
     }
     else {
         return nil;
